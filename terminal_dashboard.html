@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TermiTrade — Bloomberg Terminal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --panel: #0f0f0f;
+    --border: #1e1e1e;
+    --border-bright: #2a2a2a;
+    --amber: #ffb300;
+    --amber-dim: #7a5500;
+    --amber-glow: rgba(255,179,0,0.08);
+    --green: #00ff88;
+    --green-dim: #004422;
+    --red: #ff3355;
+    --red-dim: #440011;
+    --cyan: #00d4ff;
+    --cyan-dim: #003344;
+    --white: #e8e8e8;
+    --dim: #444;
+    --dimmer: #222;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    height: 100vh;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+
+  /* Scanlines overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* CRT flicker */
+  @keyframes flicker {
+    0%,100% { opacity: 1; }
+    92% { opacity: 1; }
+    93% { opacity: 0.97; }
+    94% { opacity: 1; }
+  }
+  body { animation: flicker 8s infinite; }
+
+  /* Top bar */
+  #topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    background: var(--amber);
+    color: #000;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+  #topbar .logo { font-size: 13px; letter-spacing: 0.3em; }
+  #topbar .tagline { opacity: 0.7; font-size: 10px; }
+  #clock { font-size: 12px; font-weight: 700; }
+
+  /* Main layout */
+  #main {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    grid-template-rows: auto 1fr auto;
+    height: calc(100vh - 28px);
+    gap: 1px;
+    background: var(--border);
+  }
+
+  .panel {
+    background: var(--panel);
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 5px 10px;
+    background: var(--dimmer);
+    border-bottom: 1px solid var(--border-bright);
+    color: var(--amber);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-header .badge {
+    background: var(--amber);
+    color: #000;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  /* Ticker tape */
+  #ticker-wrap {
+    grid-column: 1 / -1;
+    background: #000;
+    border-bottom: 1px solid var(--amber-dim);
+    overflow: hidden;
+    height: 26px;
+    display: flex;
+    align-items: center;
+  }
+  #ticker-label {
+    background: var(--amber);
+    color: #000;
+    padding: 0 10px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #ticker-track {
+    overflow: hidden;
+    flex: 1;
+    height: 100%;
+    position: relative;
+  }
+  #ticker-content {
+    display: flex;
+    align-items: center;
+    height: 100%;
+    white-space: nowrap;
+    animation: scroll-left 40s linear infinite;
+    position: absolute;
+  }
+  @keyframes scroll-left {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .tick-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: 30px;
+    font-size: 11px;
+  }
+  .tick-sym { color: var(--amber); font-weight: 600; }
+  .tick-price { color: var(--white); }
+  .tick-chg.up { color: var(--green); }
+  .tick-chg.dn { color: var(--red); }
+  .tick-sep { color: var(--dim); }
+
+  /* Left panel — watchlist */
+  #watchlist { grid-row: 2; }
+  .watch-item {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.1s;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    gap: 2px;
+  }
+  .watch-item:hover { background: var(--amber-glow); }
+  .watch-item.active { background: rgba(255,179,0,0.12); border-left: 2px solid var(--amber); }
+  .watch-sym { color: var(--amber); font-weight: 600; font-size: 12px; }
+  .watch-name { color: var(--dim); font-size: 10px; }
+  .watch-price { color: var(--white); font-weight: 600; font-size: 13px; text-align: right; }
+  .watch-chg { font-size: 10px; text-align: right; }
+  .up { color: var(--green); }
+  .dn { color: var(--red); }
+
+  /* Center — chart */
+  #chart-panel {
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+  }
+  #chart-info {
+    display: flex;
+    align-items: flex-end;
+    gap: 16px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: #0c0c0c;
+  }
+  #chart-symbol { font-size: 22px; font-weight: 700; color: var(--amber); letter-spacing: 0.1em; }
+  #chart-price { font-size: 28px; font-weight: 300; color: var(--white); font-family: 'Share Tech Mono'; }
+  #chart-change { font-size: 13px; padding-bottom: 4px; }
+  #chart-meta { margin-left: auto; display: flex; gap: 20px; }
+  .meta-item { text-align: right; }
+  .meta-label { color: var(--dim); font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; }
+  .meta-val { color: var(--white); font-size: 11px; }
+
+  #chart-timeframe {
+    display: flex;
+    gap: 1px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    background: #0c0c0c;
+  }
+  .tf-btn {
+    padding: 2px 10px;
+    background: transparent;
+    border: 1px solid var(--border-bright);
+    color: var(--dim);
+    font-family: 'IBM Plex Mono';
+    font-size: 10px;
+    cursor: pointer;
+    transition: all 0.1s;
+    letter-spacing: 0.1em;
+  }
+  .tf-btn:hover { color: var(--amber); border-color: var(--amber-dim); }
+  .tf-btn.active { background: var(--amber); color: #000; border-color: var(--amber); font-weight: 700; }
+
+  #chart-container {
+    flex: 1;
+    position: relative;
+    padding: 10px;
+    overflow: hidden;
+  }
+  canvas#mainChart { width: 100%; height: 100%; }
+
+  /* Right panel */
+  #right-panel { grid-row: 2; display: flex; flex-direction: column; gap: 1px; background: var(--border); }
+
+  /* Portfolio */
+  #portfolio-panel { background: var(--panel); flex: 0 0 auto; }
+  .port-item {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 2px;
+  }
+  .port-sym { color: var(--cyan); font-size: 11px; font-weight: 600; }
+  .port-shares { color: var(--dim); font-size: 10px; }
+  .port-val { color: var(--white); font-size: 11px; text-align: right; }
+  .port-pnl { font-size: 10px; text-align: right; }
+
+  /* Alerts */
+  #alerts-panel { background: var(--panel); flex: 1; overflow: hidden; }
+  .alert-item {
+    padding: 5px 10px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+  }
+  .alert-item .a-time { color: var(--dim); }
+  .alert-item .a-msg { color: var(--white); }
+  .alert-item.alert-up { border-left: 2px solid var(--green); }
+  .alert-item.alert-dn { border-left: 2px solid var(--red); }
+  .alert-item.alert-sys { border-left: 2px solid var(--amber); }
+
+  /* Bottom bar */
+  #bottombar {
+    grid-column: 1 / -1;
+    background: #0c0c0c;
+    border-top: 1px solid var(--border-bright);
+    padding: 5px 12px;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+  }
+  .stat-item { display: flex; gap: 8px; align-items: center; }
+  .stat-label { color: var(--dim); font-size: 10px; letter-spacing: 0.1em; }
+  .stat-val { color: var(--amber); font-size: 11px; font-weight: 600; }
+  #status-right { margin-left: auto; color: var(--dim); font-size: 10px; }
+  #status-dot { display: inline-block; width: 6px; height: 6px; background: var(--green); border-radius: 50%; margin-right: 6px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* Command line at very bottom */
+  #cmdline {
+    grid-column: 1 / -1;
+    background: #000;
+    border-top: 1px solid var(--amber-dim);
+    padding: 4px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #cmdline span { color: var(--amber); font-weight: 700; font-size: 11px; }
+  #cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--white);
+    font-family: 'IBM Plex Mono';
+    font-size: 11px;
+    caret-color: var(--amber);
+  }
+  #cmd-hint { color: var(--dim); font-size: 10px; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topbar">
+  <div>
+    <span class="logo">▓▓ TERMITRADE</span>
+    <span class="tagline"> — Bloomberg for the Terminal Age</span>
+  </div>
+  <div>
+    <span id="clock">--:--:--</span>
+    &nbsp;&nbsp;IST
+    &nbsp;&nbsp;|&nbsp;&nbsp;
+    <span id="market-status">MARKET OPEN</span>
+  </div>
+</div>
+
+<!-- Main grid -->
+<div id="main">
+
+  <!-- Ticker tape -->
+  <div id="ticker-wrap">
+    <div id="ticker-label">◆ LIVE</div>
+    <div id="ticker-track">
+      <div id="ticker-content" id="ticker-content"></div>
+    </div>
+  </div>
+
+  <!-- Left: Watchlist -->
+  <div class="panel" id="watchlist">
+    <div class="panel-header">Watchlist <span class="badge">LIVE</span></div>
+    <div id="watchlist-items"></div>
+  </div>
+
+  <!-- Center: Chart -->
+  <div class="panel" id="chart-panel">
+    <div id="chart-info">
+      <div id="chart-symbol">AAPL</div>
+      <div id="chart-price">182.30</div>
+      <div id="chart-change" class="up">▲ +2.14 (+1.19%)</div>
+      <div id="chart-meta">
+        <div class="meta-item"><div class="meta-label">Open</div><div class="meta-val" id="m-open">180.16</div></div>
+        <div class="meta-item"><div class="meta-label">High</div><div class="meta-val" id="m-high">183.10</div></div>
+        <div class="meta-item"><div class="meta-label">Low</div><div class="meta-val" id="m-low">179.88</div></div>
+        <div class="meta-item"><div class="meta-label">Vol</div><div class="meta-val" id="m-vol">54.2M</div></div>
+      </div>
+    </div>
+    <div id="chart-timeframe">
+      <button class="tf-btn active" onclick="setTF(this,'1D')">1D</button>
+      <button class="tf-btn" onclick="setTF(this,'5D')">5D</button>
+      <button class="tf-btn" onclick="setTF(this,'1M')">1M</button>
+      <button class="tf-btn" onclick="setTF(this,'3M')">3M</button>
+      <button class="tf-btn" onclick="setTF(this,'1Y')">1Y</button>
+    </div>
+    <div id="chart-container">
+      <canvas id="mainChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Right: Portfolio + Alerts -->
+  <div id="right-panel">
+    <div class="panel" id="portfolio-panel">
+      <div class="panel-header">Portfolio <span class="badge" id="port-badge">P&L</span></div>
+      <div id="portfolio-items"></div>
+      <div style="padding:6px 10px; border-top:1px solid #1a1a1a; display:flex; justify-content:space-between;">
+        <span style="color:#444;font-size:10px;">TOTAL VALUE</span>
+        <span style="color:var(--amber);font-size:12px;font-weight:700;" id="total-val">$0.00</span>
+      </div>
+    </div>
+    <div class="panel" id="alerts-panel">
+      <div class="panel-header">Alerts Log <span class="badge">SYS</span></div>
+      <div id="alerts-list"></div>
+    </div>
+  </div>
+
+  <!-- Bottom stats bar -->
+  <div id="bottombar">
+    <div class="stat-item"><span class="stat-label">NIFTY50</span><span class="stat-val" id="nifty-val">21,843</span><span id="nifty-chg" class="up" style="font-size:10px;">▲ +0.43%</span></div>
+    <div class="stat-item"><span class="stat-label">SENSEX</span><span class="stat-val" id="sensex-val">72,186</span><span id="sensex-chg" class="up" style="font-size:10px;">▲ +0.31%</span></div>
+    <div class="stat-item"><span class="stat-label">S&P 500</span><span class="stat-val">4,892</span><span class="up" style="font-size:10px;">▲ +0.18%</span></div>
+    <div class="stat-item"><span class="stat-label">BTC/USD</span><span class="stat-val" id="btc-val">67,420</span><span id="btc-chg" class="up" style="font-size:10px;">▲ +2.1%</span></div>
+    <div class="stat-item"><span class="stat-label">USD/INR</span><span class="stat-val">83.42</span><span class="dn" style="font-size:10px;">▼ -0.05%</span></div>
+    <div id="status-right"><span id="status-dot"></span>FEED ACTIVE &nbsp;|&nbsp; LATENCY: <span id="latency">4ms</span> &nbsp;|&nbsp; TERMITRADE v1.0</div>
+  </div>
+
+  <!-- Command line -->
+  <div id="cmdline">
+    <span>CMD&gt;</span>
+    <input id="cmd-input" type="text" placeholder="Type symbol to search... (e.g. TSLA, BTC, NFLX)" autocomplete="off" spellcheck="false" />
+    <span id="cmd-hint">[ ENTER ] search &nbsp; [ F5 ] refresh &nbsp; [ ESC ] clear</span>
+  </div>
+
+</div>
+
+<script>
+// ===================== DATA =====================
+const stocks = [
+  { sym:'AAPL',  name:'Apple Inc.',         price:182.30, chg:+2.14, pct:+1.19, open:180.16, high:183.10, low:179.88, vol:'54.2M' },
+  { sym:'GOOGL', name:'Alphabet Inc.',      price:141.80, chg:-0.92, pct:-0.64, open:142.72, high:143.10, low:141.20, vol:'28.1M' },
+  { sym:'MSFT',  name:'Microsoft Corp.',    price:378.50, chg:+4.20, pct:+1.12, open:374.30, high:379.80, low:373.90, vol:'31.4M' },
+  { sym:'TSLA',  name:'Tesla Inc.',         price:248.20, chg:-3.80, pct:-1.51, open:252.00, high:253.10, low:247.60, vol:'89.3M' },
+  { sym:'NVDA',  name:'NVIDIA Corp.',       price:621.40, chg:+18.30, pct:+3.04, open:603.10, high:624.90, low:601.80, vol:'42.7M' },
+  { sym:'META',  name:'Meta Platforms',     price:392.10, chg:+5.60, pct:+1.45, open:386.50, high:394.20, low:385.90, vol:'19.8M' },
+  { sym:'AMZN',  name:'Amazon.com Inc.',    price:178.90, chg:-1.20, pct:-0.67, open:180.10, high:181.30, low:178.50, vol:'37.6M' },
+  { sym:'NFLX',  name:'Netflix Inc.',       price:598.30, chg:+8.70, pct:+1.48, open:589.60, high:601.20, low:588.40, vol:'12.3M' },
+];
+
+const portfolio = [
+  { sym:'AAPL',  shares:10, avgCost:160.00 },
+  { sym:'NVDA',  shares:5,  avgCost:580.00 },
+  { sym:'MSFT',  shares:8,  avgCost:350.00 },
+  { sym:'TSLA',  shares:15, avgCost:220.00 },
+];
+
+let activeStock = stocks[0];
+let currentTF = '1D';
+
+// ===================== CLOCK =====================
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-US',{hour12:false});
+  document.getElementById('latency').textContent = (Math.floor(Math.random()*8)+2)+'ms';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ===================== PRICE SIMULATION =====================
+function jitter(price, volatility=0.002) {
+  return price * (1 + (Math.random()-0.5)*volatility);
+}
+
+function updatePrices() {
+  stocks.forEach(s => {
+    const newPrice = jitter(s.price, 0.003);
+    const delta = newPrice - s.price;
+    s.chg += delta;
+    s.pct = (s.chg / (s.price - s.chg)) * 100;
+    s.price = newPrice;
+    if(newPrice > s.high) s.high = newPrice;
+    if(newPrice < s.low)  s.low  = newPrice;
+  });
+  renderWatchlist();
+  if(activeStock) updateChartInfo(activeStock);
+  updatePortfolio();
+  updateTicker();
+  randomAlert();
+}
+
+// ===================== WATCHLIST =====================
+function renderWatchlist() {
+  const el = document.getElementById('watchlist-items');
+  el.innerHTML = stocks.map((s,i) => `
+    <div class="watch-item ${s.sym===activeStock.sym?'active':''}" onclick="selectStock(${i})">
+      <span class="watch-sym">${s.sym}</span>
+      <span class="watch-price">$${s.price.toFixed(2)}</span>
+      <span class="watch-name">${s.name.substring(0,18)}</span>
+      <span class="watch-chg ${s.chg>=0?'up':'dn'}">${s.chg>=0?'▲':'▼'} ${Math.abs(s.pct).toFixed(2)}%</span>
+    </div>
+  `).join('');
+}
+
+function selectStock(i) {
+  activeStock = stocks[i];
+  updateChartInfo(activeStock);
+  generateChart(activeStock);
+  renderWatchlist();
+  addAlert('sys', `Switched to ${activeStock.sym} — Loading chart data`);
+}
+
+// ===================== CHART INFO =====================
+function updateChartInfo(s) {
+  document.getElementById('chart-symbol').textContent = s.sym;
+  document.getElementById('chart-price').textContent = '$'+s.price.toFixed(2);
+  const chgEl = document.getElementById('chart-change');
+  chgEl.textContent = `${s.chg>=0?'▲':'▼'} ${s.chg>=0?'+':''}${s.chg.toFixed(2)} (${s.pct>=0?'+':''}${s.pct.toFixed(2)}%)`;
+  chgEl.className = s.chg>=0?'up':'dn';
+  document.getElementById('m-open').textContent = '$'+s.open.toFixed(2);
+  document.getElementById('m-high').textContent = '$'+s.high.toFixed(2);
+  document.getElementById('m-low').textContent  = '$'+s.low.toFixed(2);
+  document.getElementById('m-vol').textContent  = s.vol;
+}
+
+// ===================== CHART =====================
+let chartData = [];
+let animFrame;
+
+function generateChartData(base, points, volatility) {
+  const data = [];
+  let price = base * 0.98;
+  for(let i=0;i<points;i++) {
+    price = price*(1+(Math.random()-0.48)*volatility);
+    data.push(price);
+  }
+  data.push(base);
+  return data;
+}
+
+function generateChart(s) {
+  const pts = currentTF==='1D'?390 : currentTF==='5D'?390 : currentTF==='1M'?30 : currentTF==='3M'?90 : 252;
+  const vol = currentTF==='1D'?0.002 : 0.005;
+  chartData = generateChartData(s.price, pts, vol);
+  drawChart();
+}
+
+function drawChart() {
+  const canvas = document.getElementById('mainChart');
+  const container = document.getElementById('chart-container');
+  canvas.width  = container.clientWidth;
+  canvas.height = container.clientHeight;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const pad = { t:20, r:70, b:40, l:10 };
+  const cW = W-pad.l-pad.r, cH = H-pad.t-pad.b;
+
+  ctx.clearRect(0,0,W,H);
+
+  const min = Math.min(...chartData)*0.999;
+  const max = Math.max(...chartData)*1.001;
+  const range = max-min;
+
+  const toX = i => pad.l + (i/(chartData.length-1))*cW;
+  const toY = v => pad.t + (1-(v-min)/range)*cH;
+
+  const up = chartData[chartData.length-1] >= chartData[0];
+  const lineColor = up ? '#00ff88' : '#ff3355';
+  const fillTop   = up ? 'rgba(0,255,136,0.15)' : 'rgba(255,51,85,0.15)';
+  const fillBot   = 'rgba(0,0,0,0)';
+
+  // Grid lines
+  ctx.strokeStyle = '#1a1a1a';
+  ctx.lineWidth = 1;
+  for(let g=0;g<=5;g++) {
+    const y = pad.t + (g/5)*cH;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+cW,y); ctx.stroke();
+    const val = max - (g/5)*range;
+    ctx.fillStyle = '#444';
+    ctx.font = '9px IBM Plex Mono';
+    ctx.textAlign = 'left';
+    ctx.fillText('$'+val.toFixed(2), W-pad.r+6, y+3);
+  }
+
+  // Vertical grid
+  const vlines = Math.min(8, chartData.length-1);
+  ctx.strokeStyle = '#141414';
+  for(let g=0;g<=vlines;g++) {
+    const x = pad.l + (g/vlines)*cW;
+    ctx.beginPath(); ctx.moveTo(x,pad.t); ctx.lineTo(x,pad.t+cH); ctx.stroke();
+  }
+
+  // Area fill
+  const grad = ctx.createLinearGradient(0,pad.t,0,pad.t+cH);
+  grad.addColorStop(0, fillTop);
+  grad.addColorStop(1, fillBot);
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(chartData[0]));
+  chartData.forEach((v,i) => ctx.lineTo(toX(i), toY(v)));
+  ctx.lineTo(toX(chartData.length-1), pad.t+cH);
+  ctx.lineTo(toX(0), pad.t+cH);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = lineColor;
+  ctx.shadowBlur = 4;
+  chartData.forEach((v,i) => {
+    i===0 ? ctx.moveTo(toX(i),toY(v)) : ctx.lineTo(toX(i),toY(v));
+  });
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Current price line
+  const last = chartData[chartData.length-1];
+  const ly = toY(last);
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 0.8;
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath(); ctx.moveTo(pad.l,ly); ctx.lineTo(pad.l+cW,ly); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+
+  // Dot at end
+  ctx.beginPath();
+  ctx.arc(toX(chartData.length-1), ly, 4, 0, Math.PI*2);
+  ctx.fillStyle = lineColor;
+  ctx.shadowColor = lineColor;
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Time labels
+  ctx.fillStyle = '#444';
+  ctx.font = '9px IBM Plex Mono';
+  ctx.textAlign = 'center';
+  const labels1D = ['09:30','10:30','11:30','12:30','13:30','14:30','15:30','16:00'];
+  const labelsW  = ['Mon','Tue','Wed','Thu','Fri','Mon','Tue','Wed'];
+  const labelsM  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug'];
+  const labels = currentTF==='1D'?labels1D : currentTF==='5D'?labelsW : labelsM;
+  labels.forEach((l,i) => {
+    const x = pad.l + (i/(labels.length-1))*cW;
+    ctx.fillText(l, x, H-8);
+  });
+
+  // Volume bars (mini)
+  const volH = cH * 0.08;
+  ctx.globalAlpha = 0.3;
+  chartData.forEach((v,i) => {
+    const h = volH * (0.3 + Math.random()*0.7);
+    const x = toX(i);
+    ctx.fillStyle = v >= (chartData[i-1]||v) ? '#00ff88' : '#ff3355';
+    ctx.fillRect(x-0.5, pad.t+cH-h, 1, h);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ===================== TIMEFRAME =====================
+function setTF(btn, tf) {
+  currentTF = tf;
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  generateChart(activeStock);
+}
+
+// ===================== PORTFOLIO =====================
+function updatePortfolio() {
+  const el = document.getElementById('portfolio-items');
+  let total = 0;
+  el.innerHTML = portfolio.map(p => {
+    const s = stocks.find(x=>x.sym===p.sym);
+    const val = s.price * p.shares;
+    const cost = p.avgCost * p.shares;
+    const pnl = val - cost;
+    const pnlPct = (pnl/cost)*100;
+    total += val;
+    return `
+      <div class="port-item">
+        <span class="port-sym">${p.sym}</span>
+        <span class="port-val">$${val.toFixed(0)}</span>
+        <span class="port-shares">${p.shares} shares @ $${p.avgCost}</span>
+        <span class="port-pnl ${pnl>=0?'up':'dn'}">${pnl>=0?'+':''}$${pnl.toFixed(0)} (${pnlPct>=0?'+':''}${pnlPct.toFixed(1)}%)</span>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('total-val').textContent = '$'+total.toFixed(2);
+}
+
+// ===================== TICKER =====================
+function updateTicker() {
+  const items = [...stocks, ...stocks]; // duplicate for seamless scroll
+  const html = items.map(s => `
+    <span class="tick-item">
+      <span class="tick-sym">${s.sym}</span>
+      <span class="tick-price">$${s.price.toFixed(2)}</span>
+      <span class="tick-chg ${s.chg>=0?'up':'dn'}">${s.chg>=0?'▲':'▼'}${Math.abs(s.pct).toFixed(2)}%</span>
+      <span class="tick-sep">│</span>
+    </span>
+  `).join('');
+  document.getElementById('ticker-content').innerHTML = html;
+}
+
+// ===================== ALERTS =====================
+const alertMessages = [
+  (s) => [`alert-up`, `${s.sym} broke above 50-day MA — Bullish signal`],
+  (s) => [`alert-dn`, `${s.sym} volume spike detected — 2.3x average`],
+  (s) => [`alert-up`, `${s.sym} RSI crossed 70 — Momentum strong`],
+  (s) => [`alert-sys`,`Price alert triggered: ${s.sym} @ $${s.price.toFixed(2)}`],
+  (s) => [`alert-dn`, `${s.sym} approaching resistance at $${(s.price*1.02).toFixed(2)}`],
+];
+let alertCount = 0;
+
+function addAlert(type, msg) {
+  const el = document.getElementById('alerts-list');
+  const now = new Date().toLocaleTimeString('en-US',{hour12:false});
+  const div = document.createElement('div');
+  div.className = `alert-item alert-${type}`;
+  div.innerHTML = `<span class="a-time">${now}</span> <span class="a-msg">${msg}</span>`;
+  el.insertBefore(div, el.firstChild);
+  if(el.children.length > 20) el.removeChild(el.lastChild);
+}
+
+function randomAlert() {
+  if(Math.random() > 0.7) {
+    const s = stocks[Math.floor(Math.random()*stocks.length)];
+    const [type, msg] = alertMessages[Math.floor(Math.random()*alertMessages.length)](s);
+    addAlert(type.replace('alert-',''), msg);
+  }
+}
+
+// ===================== CMD INPUT =====================
+document.getElementById('cmd-input').addEventListener('keydown', e => {
+  if(e.key === 'Enter') {
+    const val = e.target.value.trim().toUpperCase();
+    const found = stocks.findIndex(s => s.sym === val);
+    if(found>=0) {
+      selectStock(found);
+      addAlert('sys', `CMD: Loaded ${val}`);
+    } else {
+      addAlert('dn', `CMD: Symbol "${val}" not found in feed`);
+    }
+    e.target.value = '';
+  }
+  if(e.key === 'Escape') e.target.value = '';
+});
+
+// ===================== INIT =====================
+function init() {
+  renderWatchlist();
+  generateChart(activeStock);
+  updatePortfolio();
+  updateTicker();
+  updateChartInfo(activeStock);
+
+  // Startup alerts
+  setTimeout(()=>addAlert('sys','TermiTrade v1.0 initialized — Feed connected'), 300);
+  setTimeout(()=>addAlert('sys','Loaded 8 symbols — Portfolio synced'), 700);
+  setTimeout(()=>addAlert('up','NVDA +3.04% — Leading gainers today'), 1200);
+
+  // Live updates
+  setInterval(updatePrices, 2000);
+  setInterval(()=>{ chartData.push(jitter(chartData[chartData.length-1], 0.003)); chartData.shift(); drawChart(); }, 3000);
+}
+
+window.addEventListener('resize', drawChart);
+init();
+</script>
+</body>
+</html>
