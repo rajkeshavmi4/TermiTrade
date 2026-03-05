@@ -1,7 +1,7 @@
 # TermiTrade 📈
-### Bloomberg Terminal vibes. Open source. In your terminal.
+### A stock tracker that lives entirely in your terminal.
 
-A real-time stock portfolio tracker with a beautiful TUI (Terminal UI) built in **C++** using FTXUI. Live prices, ASCII charts, portfolio P&L tracking, and a price alert system — all without leaving your terminal.
+I built this because I wanted to track my portfolio without opening a browser tab every five minutes. Everything runs in the terminal: live prices, charts drawn in ASCII, a portfolio P&L tracker, and a price alert system. No browser, no Electron app, no nonsense.
 
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
@@ -24,22 +24,21 @@ A real-time stock portfolio tracker with a beautiful TUI (Terminal UI) built in 
 
 ---
 
-## Features
+## What it does
 
-- **Real-time prices** via Alpha Vantage API (free tier: 25 req/day)
-- **ASCII line charts** with Unicode fill — rendered entirely in terminal
-- **Multi-timeframe** — 1D / 5D / 1M / 3M / 1Y
-- **Portfolio tracker** — P&L per holding + total portfolio value live
-- **Price alert system** — set threshold alerts, get notified in-app
-- **Scrolling ticker tape** across the top
-- **Keyboard navigation** — vim-style (j/k) or arrow keys
-- **Zero dependencies on GUI** — pure terminal, works over SSH
+- Pulls live stock prices via the Alpha Vantage API (free tier works fine)
+- Draws line charts directly in the terminal using ASCII and Unicode characters
+- Lets you switch between 1D, 5D, 1M, 3M, and 1Y views
+- Tracks your portfolio holdings and shows you live P&L per stock
+- Fires alerts when a stock crosses a price you set
+- Has a scrolling ticker tape at the top because it looks cool
+- Works over SSH since there is zero GUI dependency
 
 ---
 
-## Installation
+## Getting started
 
-### Prerequisites
+### What you need installed first
 ```bash
 # Ubuntu/Debian
 sudo apt-get install libcurl4-openssl-dev cmake build-essential
@@ -48,7 +47,7 @@ sudo apt-get install libcurl4-openssl-dev cmake build-essential
 brew install curl cmake
 ```
 
-### Build
+### Building it
 ```bash
 git clone https://github.com/yourusername/termitrade
 cd termitrade
@@ -57,42 +56,43 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j4
 ```
 
-### Run
+### Running it
+
 ```bash
-# With Alpha Vantage API key (free at alphavantage.co)
+# Pass your API key directly (get a free one at alphavantage.co)
 ./termitrade YOUR_API_KEY
 
-# Or set env variable
+# Or export it as an environment variable
 export AV_API_KEY=your_key_here
 ./termitrade
 
-# Demo mode (no API key needed, uses simulated data)
+# No API key? Demo mode uses simulated data
 ./termitrade demo
 ```
 
 ---
 
-## Keyboard Shortcuts
+## Keyboard shortcuts
 
-| Key | Action |
-|-----|--------|
-| `↑` / `k` | Move up in watchlist |
-| `↓` / `j` | Move down in watchlist |
+| Key | What it does |
+|-----|-------------|
+| `↑` or `k` | Move up in the watchlist |
+| `↓` or `j` | Move down in the watchlist |
 | `1` | Switch to 1D chart |
 | `5` | Switch to 5D chart |
 | `m` | Switch to 1M chart |
 | `3` | Switch to 3M chart |
 | `y` | Switch to 1Y chart |
-| `a` | Add price alert for selected stock |
-| `p` | Add stock to portfolio |
-| `r` | Force refresh prices |
+| `a` | Add a price alert for the selected stock |
+| `p` | Add selected stock to your portfolio |
+| `r` | Force refresh all prices |
 | `q` | Quit |
 
 ---
 
 ## Configuration
 
-Edit `config.json` to set your watchlist, portfolio, and alerts:
+Edit `config.json` before running to set up your own watchlist, portfolio, and alerts:
 
 ```json
 {
@@ -112,30 +112,30 @@ Edit `config.json` to set your watchlist, portfolio, and alerts:
 
 ---
 
-## Tech Stack
+## Tech stack
 
-| Component | Technology |
-|-----------|-----------|
-| UI Framework | [FTXUI](https://github.com/ArthurSonzogni/FTXUI) — C++ TUI library |
-| HTTP Client | libcurl |
-| JSON Parser | [nlohmann/json](https://github.com/nlohmann/json) |
-| Data Source | [Alpha Vantage API](https://www.alphavantage.co/) (free) |
-| Build System | CMake + FetchContent |
+| Part | What I used |
+|------|-------------|
+| Terminal UI | [FTXUI](https://github.com/ArthurSonzogni/FTXUI) |
+| HTTP requests | libcurl |
+| JSON parsing | [nlohmann/json](https://github.com/nlohmann/json) |
+| Price data | [Alpha Vantage API](https://www.alphavantage.co/) |
+| Build system | CMake with FetchContent |
 
 ---
 
-## Project Structure
+## How the code is organized
 
 ```
 termitrade/
 ├── src/
-│   └── main.cpp          # Entry point, layout, event loop
+│   └── main.cpp          # entry point, layout, event loop
 ├── include/
 │   ├── api_client.hpp    # Alpha Vantage HTTP wrapper
-│   ├── chart.hpp         # ASCII/Unicode chart renderer
-│   ├── portfolio.hpp     # Holdings & P&L calculation
-│   ├── watchlist.hpp     # Stock data structures
-│   └── alerts.hpp        # Price alert engine
+│   ├── chart.hpp         # ASCII chart renderer
+│   ├── portfolio.hpp     # holdings and P&L logic
+│   ├── watchlist.hpp     # stock data structures
+│   └── alerts.hpp        # price alert engine
 ├── CMakeLists.txt
 ├── config.json.example
 └── README.md
@@ -143,27 +143,27 @@ termitrade/
 
 ---
 
-## Roadmap
+## What I want to add next
 
 - [ ] Candlestick chart mode
-- [ ] Indian market support (NSE/BSE via unofficial API)
-- [ ] Crypto portfolio (Binance API)
-- [ ] Export portfolio report to CSV
-- [ ] Config file live reload
-- [ ] `ncurses` fallback for older terminals
+- [ ] Indian market support (NSE/BSE)
+- [ ] Crypto portfolio tracking
+- [ ] Export portfolio summary to CSV
+- [ ] Live reload config without restarting
+- [ ] ncurses fallback for older terminals
 
 ---
 
 ## Contributing
 
-PRs welcome! This is a learning project — if you're a fellow student at DTU or anywhere else and want to contribute, open an issue first.
+This is a personal project I built to learn systems programming and TUI design. If you want to add something or fix a bug, open an issue and we can talk about it before you start coding.
 
 ---
 
 ## License
 
-MIT — use it, fork it, build on it.
+MIT. Use it however you want.
 
 ---
 
-*Built by Keshav Raj — DTU'29*
+*Keshav Raj, DTU CSE 2029*
