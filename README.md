@@ -166,4 +166,4 @@ MIT. Use it however you want.
 
 ---
 
-*Keshav Raj, DTU CSE 2029*
+*Keshav Raj, DTU 2029*
