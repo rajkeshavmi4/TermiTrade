@@ -1,4 +1,4 @@
-# TermiTrade 📈
+# TermiTrade 
 ### A stock tracker that lives entirely in your terminal.
 
 I built this because I wanted to track my portfolio without opening a browser tab every five minutes. Everything runs in the terminal: live prices, charts drawn in ASCII, a portfolio P&L tracker, and a price alert system. No browser, no Electron app, no nonsense.
